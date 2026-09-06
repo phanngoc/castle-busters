@@ -32,6 +32,17 @@
   var LEVEL = clamp(parseInt(lsGet('cb_level', '1'), 10) || 1, 1, 20);
   var BEST = parseInt(lsGet('cb_best', '0'), 10) || 0;
 
+  // Platform trả save về sau khi khởi động. Lấy giá trị TỐT HƠN giữa local và
+  // remote, không ghi đè mù — người chơi offline một lúc rồi mới online lại
+  // thì tiến độ offline không được biến mất.
+  window.__arcadeApplyRemote = function (d) {
+    if (!d) return;
+    if (typeof d.best === 'number' && d.best > BEST) { BEST = d.best; lsSet('cb_best', String(BEST)); }
+    if (typeof d.level === 'number' && d.level > LEVEL) {
+      LEVEL = clamp(d.level, 1, 20); lsSet('cb_level', String(LEVEL));
+    }
+  };
+
   // ---- audio (tiny Web Audio SFX) ----
   var AC = null, muted = (lsGet('cb_mute', '0') === '1');
   function initAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); }
@@ -591,6 +602,11 @@
     if (S.over) return;
     S.over = true; S.running = false; S.aim = null;
     if (S.score > BEST) { BEST = S.score; lsSet('cb_best', String(BEST)); }
+    if (window.ArcadeGame) {
+      ArcadeGame.onScore('alltime', S.score);
+      ArcadeGame.onScore('daily', S.score);
+      ArcadeGame.syncSave({ level: LEVEL, best: BEST });
+    }
     var leveledUp = false;
     if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }
     else sfx('lose');

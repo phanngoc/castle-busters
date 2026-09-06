@@ -1,0 +1,16 @@
+[game]
+id      = "castle"
+name    = "Castle Busters"
+version = "1.0.0"
+engine  = "canvas2d"
+orientation = "portrait"
+
+[runtime]
+mode = "offline"
+
+[capabilities]
+save        = true
+leaderboard = ["daily", "alltime"]
+
+[limits]
+bundle_bytes = 5242880

@@ -32,3 +32,19 @@ thấp hơn máu một viên gạch thì bắn cả trận HP vẫn không giả
 
 ## License
 MIT
+
+## Kết nối platform Arcade
+
+Game dùng [arcade-platform](https://github.com/phanngoc/arcade-platform) cho save
+đồng bộ nhiều máy và bảng xếp hạng. **Platform là bổ sung, không phải phụ thuộc** —
+platform chết thì game vẫn chơi được y như cũ bằng `localStorage`.
+
+| File | Vai trò |
+|---|---|
+| `arcade.toml` | Manifest: mode `offline`, khai báo capability `save` + bảng `daily`/`alltime` |
+| `vendor/arcade.js` | SDK bản IIFE (1,7KB gzip) — nạp bằng `<script src>`, không cần npm |
+| `arcade-bridge.js` | Nối game với SDK; mọi lời gọi đều nuốt lỗi |
+
+Khi platform trả save về, `__arcadeApplyRemote` lấy giá trị **tốt hơn** giữa local và
+remote thay vì ghi đè mù — chơi offline một lúc rồi online lại thì tiến độ offline
+không bị mất.
