@@ -125,7 +125,7 @@ const SIM = `(function sim(level, games) {
     { env: Object.assign({}, process.env, { PORT: String(SRV_PORT) }), stdio: 'ignore' });
   const profile = fs.mkdtempSync('/tmp/cb-chrome-');
   const chrome = spawn(CHROME, [
-    '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`,
+    '--headless=new', '--no-sandbox', `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--hide-scrollbars',
     '--mute-audio', `--window-size=${VW},${VH}`, 'about:blank'
   ], { stdio: 'ignore' });
