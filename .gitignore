@@ -2,3 +2,4 @@
 node_modules/
 .gstack/
 *.log
+castle-server.log

@@ -10,8 +10,9 @@
 
   // ---- tunables ----
   var GRAV = 1500;            // px/s^2 for cannonballs & falling bricks
-  var ROUND = 60;            // seconds
-  var ENERGY_MAX = 10, ENERGY_REGEN = 1.05; // per second
+  var RULES = window.CastleRules;          // rules.js — luật thuần, có unit test
+  var ROUND = RULES.ROUND;                 // seconds
+  var ENERGY_MAX = RULES.ENERGY_MAX;
   var CANNON_CD = 0.9;       // seconds
   var CANNON_DMG = 3;        // >= BRICK_HP so a direct hit shatters bricks
   var BRICK_HP = 2;
@@ -259,26 +260,27 @@
   // ---------- AI ----------
   function updateAI(dt) {
     var ai = S.ai, k = S.aiSkill; // 0..1 skill scaling from level
-    ai.energy = Math.min(ENERGY_MAX, ai.energy + ENERGY_REGEN * (1 + 0.25 * k) * dt);
+    ai.energy = Math.min(ENERGY_MAX, ai.energy + RULES.energyRate(S.time, S.overtime) * dt);
     ai.deployTmr -= dt; ai.fireTmr -= dt;
     if (ai.deployTmr <= 0) {
-      var opts = CARD_ORDER.filter(function (key) { return UNIT_TYPES[key].cost <= ai.energy; });
-      if (opts.length) {
-        var pick = opts[Math.floor(Math.random() * opts.length)];
-        ai.energy -= UNIT_TYPES[pick].cost; spawnUnit('R', pick);
-      }
-      ai.deployTmr = rand(1.9 - 0.7 * k, 3.6 - 1.2 * k);
+      // mối đe doạ = lính người chơi đi xa nhất (gần lâu đài AI nhất)
+      var threat = null, tx0 = -1;
+      for (var q = 0; q < S.units.length; q++) { var pu = S.units[q]; if (pu.side === 'L' && pu.hp > 0 && pu.x > tx0) { tx0 = pu.x; threat = pu.type; } }
+      var costs = {}; CARD_ORDER.forEach(function (key) { costs[key] = UNIT_TYPES[key].cost; });
+      var choice = RULES.aiPick(CARD_ORDER, ai.energy, threat, k, costs);
+      if (choice.pick) { ai.energy -= UNIT_TYPES[choice.pick].cost; spawnUnit('R', choice.pick); }
+      ai.deployTmr = choice.wait ? 0.4 : rand(4.2 - 3.2 * k, 6.0 - 4.4 * k);   // màn thấp: ra lính chậm, phí năng lượng ở trần
     }
     if (ai.fireTmr <= 0) {
       var fi = frontColumn(S.left);
       if (fi >= 0) {
         var col = S.left.cols[fi];
-        var scatter = brickW * (1.3 - 0.9 * k); // more accurate at higher level
+        var scatter = brickW * (2.4 - 2.15 * k); // màn 1 bắn trượt nhiều, màn 20 gần như trúng
         var tx = col.x + brickW / 2 + rand(-scatter, scatter);
         var ty = groundY - (col.bricks.length) * brickH * rand(0.35, 0.95);
         fireCannon('R', tx, ty);
       }
-      ai.fireTmr = rand(2.2 - 0.8 * k, 3.6 - 1.2 * k);
+      ai.fireTmr = rand(4.5 - 3.5 * k, 6.5 - 5.2 * k);
     }
   }
 
@@ -286,7 +288,8 @@
   function update(dt) {
     if (!S.running || S.over) return;
     S.time -= dt; if (S.time < 0) S.time = 0;
-    S.energy = Math.min(ENERGY_MAX, S.energy + ENERGY_REGEN * dt);
+    S.energy = Math.min(ENERGY_MAX, S.energy + RULES.energyRate(S.time, S.overtime) * dt);
+    if (!S.overtime && !S.finalRush && S.time <= RULES.FINAL_SECS) { S.finalRush = true; flashHint('⚡ x2 NĂNG LƯỢNG — 15 giây cuối!'); }
     S.cannonCd = Math.max(0, S.cannonCd - dt);
     if (S.comboTmr > 0) { S.comboTmr -= dt; if (S.comboTmr <= 0) S.combo = 0; }
     if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 24);
@@ -411,10 +414,25 @@
     // ---- win check ----
     var hpL = castleHP(S.left), hpR = castleHP(S.right);
     S.hpL = hpL; S.hpR = hpR;
-    if (hpR <= 0.0001) endGame('win');
-    else if (hpL <= 0.0001) endGame('lose');
-    else if (S.time <= 0) endGame(hpL > hpR ? 'win' : hpR > hpL ? 'lose' : 'draw');
+    if (hpR <= 0.0001) endGame('win', true);
+    else if (hpL <= 0.0001) endGame('lose', true);
+    else if (S.overtime) {
+      var bl = bricks(S.left), br = bricks(S.right);
+      var r = RULES.resolveOvertime({ lostL: S.otStart.L - bl, lostR: S.otStart.R - br, bricksL: bl, bricksR: br,
+        hpSumL: brickHpSum(S.left), hpSumR: brickHpSum(S.right), timeLeft: S.time });
+      if (r) endGame(r, false);
+    } else if (S.time <= 0) {
+      var tr = RULES.resolveTimeUp(bricks(S.left), bricks(S.right));
+      if (tr === 'overtime') {
+        S.overtime = true; S.overtimeUsed = true; S.time = RULES.OT_SECS;
+        S.otStart = { L: bricks(S.left), R: bricks(S.right) };
+        flashHint('⏱️ HIỆP PHỤ x3 ⚡ — mất gạch trước là thua!');
+      } else endGame(tr, false);
+    }
   }
+
+  function bricks(c) { var n = 0; for (var i = 0; i < c.cols.length; i++) n += c.cols[i].bricks.length; return n; }
+  function brickHpSum(c) { var n = 0; for (var i = 0; i < c.cols.length; i++) for (var j = 0; j < c.cols[i].bricks.length; j++) n += c.cols[i].bricks[j].hp; return n; }
 
   function shootArrow(un, tx, ty) {
     var T = 0.5; var vx = (tx - un.x) / T; var vy = (ty - un.y - 0.5 * (GRAV * 0.35) * T * T) / T;
@@ -564,7 +582,7 @@
   function syncHUD() {
     hpPEl.style.width = (clamp(S.hpL, 0, 1) * 100).toFixed(1) + '%';
     hpEEl.style.width = (clamp(S.hpR, 0, 1) * 100).toFixed(1) + '%';
-    var ss = Math.ceil(S.time); timerEl.textContent = Math.floor(ss / 60) + ':' + (ss % 60 < 10 ? '0' : '') + (ss % 60);
+    var ss = Math.ceil(S.time); timerEl.textContent = (S.overtime ? 'HP ' : '') + Math.floor(ss / 60) + ':' + (ss % 60 < 10 ? '0' : '') + (ss % 60);
     timerEl.classList.toggle('warn', S.time <= 10);
     energyEl.style.width = (S.energy / ENERGY_MAX * 100) + '%';
     energyNumEl.textContent = Math.floor(S.energy) + ' / ' + ENERGY_MAX;
@@ -584,12 +602,12 @@
 
   // ---------- game lifecycle ----------
   function newGame() {
-    var skill = clamp((LEVEL - 1) / 9, 0, 1);
+    var skill = RULES.skill(LEVEL);
     S = {
-      running: true, over: false, time: ROUND, energy: 4, cannonCd: 0, shake: 0,
+      running: true, over: false, time: ROUND, energy: RULES.START_ENERGY, overtime: false, overtimeUsed: false, finalRush: false, otStart: null, result: null, cannonCd: 0, shake: 0,
       left: buildCastle('L'), right: buildCastle('R'),
       units: [], balls: [], arrows: [], parts: [], floats: [],
-      ai: { energy: 4 + skill * 3, deployTmr: rand(1.5, 2.5), fireTmr: rand(2, 3) },
+      ai: { energy: RULES.START_ENERGY, deployTmr: rand(1.5, 2.5), fireTmr: rand(2, 3) },
       aiSkill: skill, level: LEVEL,
       score: 0, combo: 0, comboTmr: 0, aim: null, aimAngle: null,
       hpL: 1, hpR: 1, cardEls: null
@@ -598,23 +616,27 @@
     buildCards();
     flashHint('MÀN ' + LEVEL + ' — kéo phía địch để ngắm bắn 💥');
   }
-  function endGame(result) {
+  function endGame(result, ko) {
     if (S.over) return;
-    S.over = true; S.running = false; S.aim = null;
+    S.over = true; S.running = false; S.aim = null; S.result = result;
+    var baseScore = S.score;
+    S.score = RULES.finalScore(baseScore, result, S.time, !!ko);
     if (S.score > BEST) { BEST = S.score; lsSet('cb_best', String(BEST)); }
     if (window.ArcadeGame) {
       ArcadeGame.onScore('alltime', S.score);
-      ArcadeGame.onScore('daily', S.score);
+      ArcadeGame.onScore('daily', RULES.dailyScore(S.score, result));
       ArcadeGame.syncSave({ level: LEVEL, best: BEST });
     }
     var leveledUp = false;
     if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }
     else sfx('lose');
     var rt = document.getElementById('resultTxt'), st = document.getElementById('endStat');
-    rt.className = 'result ' + (result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'draw');
-    rt.textContent = result === 'win' ? 'THẮNG! 🎉' : result === 'lose' ? 'THUA 💥' : 'HÒA';
+    rt.className = 'result ' + (result === 'win' ? 'win' : 'lose');
+    rt.textContent = result === 'win' ? 'THẮNG! 🎉' : 'THUA 💥';
     st.innerHTML = 'Lâu đài bạn <b>' + Math.round(clamp(S.hpL, 0, 1) * 100) + '%</b> · địch <b>' + Math.round(clamp(S.hpR, 0, 1) * 100) + '%</b>';
-    document.getElementById('endScore').innerHTML = '⭐ Điểm: <b>' + S.score + '</b> · Kỷ lục: <b>' + BEST + '</b>';
+    var bonus = S.score - baseScore;
+    document.getElementById('endScore').innerHTML = '⭐ Điểm: <b>' + S.score + '</b>' + (bonus ? ' (thưởng +' + bonus + ')' : '') +
+      (result === 'lose' ? ' · daily tính ' + RULES.dailyScore(S.score, result) : '') + ' · Kỷ lục: <b>' + BEST + '</b>';
     document.getElementById('endLevel').textContent = result === 'win'
       ? (leveledUp ? '⬆️ Lên Màn ' + LEVEL + '!' : 'Màn tối đa — Màn ' + LEVEL)
       : 'Vẫn ở Màn ' + LEVEL + ' — thử lại nhé';
@@ -647,7 +669,17 @@
   window.addEventListener('orientationchange', function () { setTimeout(resize, 200); });
 
   // debug hook
-  if (/[?&]debug=1/.test(location.search)) window.__cb = { get S() { return S; }, newGame: newGame, endGame: endGame, get level() { return LEVEL; } };
+  // step/setLevel/deploy/fire: cho test/playtest.js chạy trận giả lập nhanh (không render).
+  if (/[?&]debug=1/.test(location.search)) window.__cb = {
+    get S() { return S; }, newGame: newGame, endGame: endGame, get level() { return LEVEL; },
+    setLevel: function (n) { LEVEL = clamp(n | 0, 1, 20); },
+    step: function (dt) { if (S && S.running && !S.over) update(dt); },
+    deploy: function (k) { tryDeploy(k); },
+    fire: function (x, y) { if (S.cannonCd <= 0) { fireCannon('L', x, y); S.cannonCd = CANNON_CD; return true; } return false; },
+    frontColumn: function (side) { var c = side === 'R' ? S.right : S.left; var i = frontColumn(c); return i < 0 ? null : { x: c.cols[i].x, n: c.cols[i].bricks.length }; },
+    geo: function () { return { W: W, H: H, groundY: groundY, brickW: brickW, brickH: brickH }; },
+    UNIT_TYPES: UNIT_TYPES, CARD_ORDER: CARD_ORDER
+  };
 
   refreshStartInfo();
   resize();
