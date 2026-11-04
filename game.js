@@ -647,7 +647,17 @@
   window.addEventListener('orientationchange', function () { setTimeout(resize, 200); });
 
   // debug hook
-  if (/[?&]debug=1/.test(location.search)) window.__cb = { get S() { return S; }, newGame: newGame, endGame: endGame, get level() { return LEVEL; } };
+  // step/setLevel/deploy/fire: cho test/playtest.js chạy trận giả lập nhanh (không render).
+  if (/[?&]debug=1/.test(location.search)) window.__cb = {
+    get S() { return S; }, newGame: newGame, endGame: endGame, get level() { return LEVEL; },
+    setLevel: function (n) { LEVEL = clamp(n | 0, 1, 20); },
+    step: function (dt) { if (S && S.running && !S.over) update(dt); },
+    deploy: function (k) { tryDeploy(k); },
+    fire: function (x, y) { if (S.cannonCd <= 0) { fireCannon('L', x, y); S.cannonCd = CANNON_CD; return true; } return false; },
+    frontColumn: function (side) { var c = side === 'R' ? S.right : S.left; var i = frontColumn(c); return i < 0 ? null : { x: c.cols[i].x, n: c.cols[i].bricks.length }; },
+    geo: function () { return { W: W, H: H, groundY: groundY, brickW: brickW, brickH: brickH }; },
+    UNIT_TYPES: UNIT_TYPES, CARD_ORDER: CARD_ORDER
+  };
 
   refreshStartInfo();
   resize();
