@@ -115,7 +115,7 @@ const SIM = `(function sim(level, games) {
       cb.step(dt);
     }
     if (S.overtimeUsed) out.overtime++;
-    out[S.result || 'draw']++; out.scores.push(S.score);
+    out[S.result || (S.hpR <= 0.0001 ? 'win' : S.hpL <= 0.0001 ? 'lose' : S.hpL > S.hpR ? 'win' : S.hpR > S.hpL ? 'lose' : 'draw')]++; out.scores.push(S.score);
   }
   return out;
 })`;
