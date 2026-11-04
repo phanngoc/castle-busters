@@ -631,8 +631,8 @@
     if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }
     else sfx('lose');
     var rt = document.getElementById('resultTxt'), st = document.getElementById('endStat');
-    rt.className = 'result ' + (result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'draw');
-    rt.textContent = result === 'win' ? 'THẮNG! 🎉' : result === 'lose' ? 'THUA 💥' : 'HÒA';
+    rt.className = 'result ' + (result === 'win' ? 'win' : 'lose');
+    rt.textContent = result === 'win' ? 'THẮNG! 🎉' : 'THUA 💥';
     st.innerHTML = 'Lâu đài bạn <b>' + Math.round(clamp(S.hpL, 0, 1) * 100) + '%</b> · địch <b>' + Math.round(clamp(S.hpR, 0, 1) * 100) + '%</b>';
     var bonus = S.score - baseScore;
     document.getElementById('endScore').innerHTML = '⭐ Điểm: <b>' + S.score + '</b>' + (bonus ? ' (thưởng +' + bonus + ')' : '') +
