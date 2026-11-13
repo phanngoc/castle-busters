@@ -98,18 +98,29 @@
       h += '<button class="skin' + (cur === id ? ' on' : '') + '" data-skin="' + id + '"' + (has ? '' : ' disabled') + ' style="--c:rgb(' + s.L.join(',') + ')">' + esc(s.name) + (has ? '' : ' 🔒') + '</button>';
     });
     h += '</div>';
+    var pa = p.pass || {}, claimed = !!p.passClaimedToday;
+    h += '<div class="pf-sub">🎟️ Pass mùa' + (pa.active ? ' <b>Plus</b>' : '') + ' — quà mỗi ngày (vào quân ◉)</div>' +
+      '<button class="mini" id="passClaim" data-claim="1"' + (online && !claimed ? '' : ' disabled') + '>' + (claimed ? '✅ Đã nhận hôm nay' : '🎁 Nhận quà Pass') + '</button>';
     $('profileBody').innerHTML = h;
   }
   document.addEventListener('change', function (e) { if (e.target && e.target.name === 'cu') lsSet('cb_card_unit', e.target.value); });
   document.addEventListener('click', function (e) {
-    var t = e.target.closest ? e.target.closest('[data-up],[data-skin],[data-buy],[data-open],[data-close]') : null;
+    var t = e.target.closest ? e.target.closest('[data-up],[data-skin],[data-buy],[data-open],[data-close],[data-claim]') : null;
     if (!t) return;
     if (t.dataset.up) E.upgrade(t.dataset.up);
     else if (t.dataset.skin) { lsSet('cb_skin', t.dataset.skin); renderProfile(); }
     else if (t.dataset.buy) buy(t.dataset.buy);
     else if (t.dataset.open) openOv(t.dataset.open);
     else if (t.dataset.close) closeOv(t.dataset.close);
+    else if (t.dataset.claim) claimPass();
   });
+  function claimPass() {
+    api('POST', '/v1/castle/pass/claim', { unit: cardUnit() }).then(function (r) {
+      if (r && r.profile) setProfile(r.profile);
+      var w = (r && r.reward) || {};
+      toast('🎁 +' + (w.gold || 0) + ' vàng · +' + (w.cards || 0) + ' thẻ');
+    }).catch(function (e) { toast(e && e.code === 'ALREADY_CLAIMED' ? 'Hôm nay đã nhận rồi' : 'Không nhận được (offline?)'); });
+  }
   function openOv(id) {
     $(id).classList.add('show');
     if (id === 'profileOv') { renderProfile(); refresh(); }

@@ -644,13 +644,20 @@
     var baseScore = S.score;
     S.score = RULES.finalScore(baseScore, result, S.time, !!ko);
     if (S.score > BEST) { BEST = S.score; lsSet('cb_best', String(BEST)); }
+    var reported = window.CastleEconomy
+      ? CastleEconomy.reportMatch({ matchId: S.matchId, mode: S.mode, stage: LEVEL, won: result === 'win', durationMs: Date.now() - S.startedAt })
+      : Promise.resolve(null);
     if (window.ArcadeGame) {
-      RULES.boardsFor(S.mode).forEach(function (b) {
-        ArcadeGame.onScore(b, b === 'daily' ? RULES.dailyScore(S.score, result) : S.score);
-      });
+      var sc = S.score, md = S.mode, mid = S.matchId;
+      var submitBoards = function () {
+        RULES.boardsFor(md).forEach(function (b) {
+          ArcadeGame.onScore(b, b === 'daily' ? RULES.dailyScore(sc, result) : sc, undefined, md === 'standard' ? { matchId: mid } : undefined);
+        });
+      };
+      // Bảng Chuẩn: server chỉ nhận điểm khi trận standard đã được ghi ⇒ nộp SAU khi /v1/castle/match xong.
+      if (md === 'standard') Promise.resolve(reported).then(submitBoards, submitBoards); else submitBoards();
       ArcadeGame.syncSave({ level: LEVEL, best: BEST });
     }
-    if (window.CastleEconomy) CastleEconomy.reportMatch({ matchId: S.matchId, mode: S.mode, stage: LEVEL, won: result === 'win', durationMs: Date.now() - S.startedAt });
     var leveledUp = false;
     if (S.mode === 'standard') { sfx(result === 'win' ? 'win' : 'lose'); }
     else if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }

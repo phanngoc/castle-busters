@@ -17,8 +17,13 @@
   window.Arcade.init({ gameId: GAME_ID }).then(function (a) {
     api = a; ready = true; G.ready = true; G.playerId = a.playerId;
 
-    G.onScore = function (board, score, name) {
+    // extra (vd {matchId}) đi kèm body: bảng 'standard' của castle bắt buộc matchId của trận Đấu Chuẩn.
+    G.onScore = function (board, score, name, extra) {
       if (!ready || typeof score !== 'number' || score <= 0) return;
+      if (extra) {
+        api.req('POST', '/v1/leaderboard/' + encodeURIComponent(board), Object.assign({ score: Math.trunc(score), name: name }, extra)).catch(noop);
+        return;
+      }
       api.leaderboard(board).submit(Math.trunc(score), name).catch(noop);
     };
     G.syncSave = function (obj) {
