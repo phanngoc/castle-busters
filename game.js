@@ -706,6 +706,10 @@
     UNIT_TYPES: UNIT_TYPES, CARD_ORDER: CARD_ORDER
   };
 
+  document.getElementById('menuBtn').addEventListener('click', function () {
+    document.getElementById('endOv').classList.remove('show');
+    refreshStartInfo(); document.getElementById('startOv').classList.add('show');
+  });
   var stdBtn = document.getElementById('stdBtn');
   if (stdBtn) stdBtn.addEventListener('click', function () {
     if (window.CastleEconomy && !CastleEconomy.canStandard()) { CastleEconomy.toast('Đấu Chuẩn mở ở cấp Lâu đài 3 (cần online)'); return; }

@@ -30,6 +30,8 @@
       return api.leaderboard(board).top(n || 10).catch(function () { return []; });
     };
     G.track = function (n, p) { if (ready) api.track(n, p); };
+    // REST tới platform (profile/match/upgrade/shop/orders) — trả body, lỗi mang .code.
+    G.api = function (method, path, body) { return api.req(method, path, body).then(function (r) { return r.body; }); };
 
     // Kéo save từ platform về (chơi máy khác). Game tự quyết dùng hay không.
     api.save.get().then(function (doc) {
@@ -38,6 +40,7 @@
       }
     }).catch(noop);
 
+    if (typeof window.__arcadeOnReadyEconomy === 'function') { try { window.__arcadeOnReadyEconomy(); } catch (e) {} }
     if (typeof window.__arcadeOnReady === 'function') { try { window.__arcadeOnReady(); } catch (e) {} }
   }).catch(noop);
 })();
