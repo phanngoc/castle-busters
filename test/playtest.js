@@ -205,7 +205,9 @@ const MOCK = `(function () {
 
     console.log('\n── G1b: OFFLINE vẫn chơi được ' + '─'.repeat(22));
     const off = await cdp.evaluate(`({ online: CastleEconomy.online, std: CastleEconomy.canStandard(), lv: __cb.S.lv.L.rusher })`);
-    gate('không có platform: chiến dịch chạy, Đấu Chuẩn khoá', off.online === false && off.std === false && off.lv === 1, JSON.stringify(off));
+    // Chạy local (không platform) ⇒ offline; chạy trên prod (có platform) ⇒ online nhưng guest mới cấp 1 ⇒ Đấu Chuẩn vẫn khoá.
+    if (off.online) gate('có platform: online, guest cấp 1 ⇒ Đấu Chuẩn khoá, quân cấp 1', off.std === false && off.lv === 1, JSON.stringify(off));
+    else gate('không có platform: chiến dịch chạy, Đấu Chuẩn khoá', off.std === false && off.lv === 1, JSON.stringify(off));
 
     console.log('\n── G4: LUẬT — trận giả lập ' + '─'.repeat(25));
     const r1 = await cdp.evaluate(`${SIM}(5, ${GAMES})`);
