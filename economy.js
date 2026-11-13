@@ -14,7 +14,7 @@
 
   var profile = null;
   try { profile = JSON.parse(lsGet('cb_profile', 'null')); } catch (e) { profile = null; }
-  var online = false, pollTmr = null;
+  var online = false, pollTmr = null, reportSeq = 0;
 
   function api(method, path, body) {
     var G = window.ArcadeGame;
@@ -50,7 +50,9 @@
       return R.ownedSkins(profile && profile.entitlements).indexOf(id) >= 0 ? id : 'default';
     },
     reportMatch: function (m) {
-      var el = $('endReward');
+      // Chỉ trận báo gần nhất được ghi màn kết: phản hồi muộn của trận cũ không đè lên.
+      var my = ++reportSeq;
+      var el0 = $('endReward'), el = { set textContent(v) { if (my === reportSeq && el0) el0.textContent = v; } };
       m.cardUnit = cardUnit();
       if (!online) { if (el) el.textContent = '📴 Offline — trận không tính thưởng'; return Promise.resolve(null); }
       if (el) el.textContent = '…đang nhận thưởng';
