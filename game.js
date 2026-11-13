@@ -96,7 +96,7 @@
 
   // castle: { side, cols:[{x, bricks:[{hp,y,vy,flash}]}], total }
   function buildCastle(side) {
-    var heights = [4, 6, 8, 6, 4];               // silhouette (bottom count per col)
+    var heights = RULES.CASTLE_HEIGHTS;          // silhouette — skin KHÔNG đổi số gạch
     var n = heights.length;
     var castle = { side: side, cols: [], total: 0, dead: false };
     for (var i = 0; i < n; i++) {
@@ -177,7 +177,8 @@
 
   // ---------- entities ----------
   function spawnUnit(side, type) {
-    var t = UNIT_TYPES[type];
+    var lv = S.lv ? S.lv[side === 'L' ? 'L' : 'R'][type] : 1;
+    var t = RULES.scaleUnit(UNIT_TYPES[type], lv);   // cấp quân: chỉ máu & sát thương
     var dir = side === 'L' ? 1 : -1;
     var x = side === 'L' ? (S.left.innerEdge + 8) : (S.right.innerEdge - 8);
     S.units.push({ side: side, type: type, t: t, x: x, y: groundY - t.r, hp: t.hp, hpMax: t.hp, dir: dir, cd: 0, bob: rand(0, 6.28) });
@@ -452,12 +453,14 @@
         var x = col.x, y = b.y;
         var t = b.hp / BRICK_HP;
         // base stone colour, darker when damaged
-        var base = c.side === 'L' ? [120, 150, 200] : [200, 130, 120];
+        var sk = c.side === 'L' ? SKIN : RULES.SKINS.default;
+        var base = sk[c.side];
         var shade = 0.55 + 0.45 * t;
         ctx.fillStyle = 'rgb(' + Math.round(base[0] * shade) + ',' + Math.round(base[1] * shade) + ',' + Math.round(base[2] * shade) + ')';
         roundRect(x + 1, y + 1, brickW - 2, brickH - 2, 3); ctx.fill();
         // mortar highlight
-        ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fillRect(x + 2, y + 2, brickW - 4, 2);
+        ctx.fillStyle = sk.mortar; ctx.fillRect(x + 2, y + 2, brickW - 4, 2);
+        skinDetail(sk.pattern, x, y);
         if (b.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (b.flash / 0.12 * 0.6) + ')'; roundRect(x + 1, y + 1, brickW - 2, brickH - 2, 3); ctx.fill(); }
       }
       // flag on the middle (tallest) column
@@ -467,6 +470,18 @@
         ctx.strokeStyle = '#5b4636'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(fx, topY); ctx.lineTo(fx, topY - 20); ctx.stroke();
         ctx.fillStyle = flagCol; ctx.beginPath(); ctx.moveTo(fx, topY - 20); ctx.lineTo(fx + 14, topY - 16); ctx.lineTo(fx, topY - 12); ctx.closePath(); ctx.fill();
       }
+    }
+  }
+  // Hoạ tiết skin: chỉ vẽ trong ô gạch, không đổi hitbox.
+  function skinDetail(pat, x, y) {
+    if (pat === 'ice') {
+      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(x + brickW * 0.25, y + 3); ctx.lineTo(x + brickW * 0.45, y + brickH * 0.6); ctx.lineTo(x + brickW * 0.7, y + brickH - 3); ctx.stroke();
+    } else if (pat === 'redstone') {
+      ctx.fillStyle = 'rgba(255,90,40,.55)'; ctx.fillRect(x + brickW * 0.3, y + brickH * 0.45, 3, 3); ctx.fillRect(x + brickW * 0.65, y + brickH * 0.25, 2, 2);
+    } else if (pat === 'bamboo') {
+      ctx.fillStyle = 'rgba(60,80,20,.45)'; ctx.fillRect(x + brickW * 0.33, y + 1, 1.5, brickH - 2); ctx.fillRect(x + brickW * 0.66, y + 1, 1.5, brickH - 2);
+      ctx.fillRect(x + 1, y + brickH * 0.5, brickW - 2, 1);
     }
   }
   function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
@@ -601,20 +616,27 @@
   }
 
   // ---------- game lifecycle ----------
-  function newGame() {
+  // mode: 'campaign' (mặc định) | 'standard' (Đấu Chuẩn: mọi quân cấp 5, bảng 'standard').
+  var MODE = 'campaign';
+  var SKIN = RULES.SKINS.default;
+  function ownedLevels() { return (window.CastleEconomy && CastleEconomy.unitLevels()) || {}; }
+  function newGame(mode) {
+    if (mode) MODE = mode;
     var skill = RULES.skill(LEVEL);
+    SKIN = RULES.skinFor(window.CastleEconomy ? CastleEconomy.skin() : 'default');
     S = {
       running: true, over: false, time: ROUND, energy: RULES.START_ENERGY, overtime: false, overtimeUsed: false, finalRush: false, otStart: null, result: null, cannonCd: 0, shake: 0,
       left: buildCastle('L'), right: buildCastle('R'),
       units: [], balls: [], arrows: [], parts: [], floats: [],
       ai: { energy: RULES.START_ENERGY, deployTmr: rand(1.5, 2.5), fireTmr: rand(2, 3) },
-      aiSkill: skill, level: LEVEL,
+      aiSkill: skill, level: LEVEL, mode: MODE, lv: RULES.matchLevels(MODE, ownedLevels(), LEVEL),
+      matchId: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), startedAt: Date.now(),
       score: 0, combo: 0, comboTmr: 0, aim: null, aimAngle: null,
       hpL: 1, hpR: 1, cardEls: null
     };
     layoutCastles();
     buildCards();
-    flashHint('MÀN ' + LEVEL + ' — kéo phía địch để ngắm bắn 💥');
+    flashHint((MODE === 'standard' ? 'ĐẤU CHUẨN (mọi quân cấp 5)' : 'MÀN ' + LEVEL) + ' — kéo phía địch để ngắm bắn 💥');
   }
   function endGame(result, ko) {
     if (S.over) return;
@@ -623,12 +645,15 @@
     S.score = RULES.finalScore(baseScore, result, S.time, !!ko);
     if (S.score > BEST) { BEST = S.score; lsSet('cb_best', String(BEST)); }
     if (window.ArcadeGame) {
-      ArcadeGame.onScore('alltime', S.score);
-      ArcadeGame.onScore('daily', RULES.dailyScore(S.score, result));
+      RULES.boardsFor(S.mode).forEach(function (b) {
+        ArcadeGame.onScore(b, b === 'daily' ? RULES.dailyScore(S.score, result) : S.score);
+      });
       ArcadeGame.syncSave({ level: LEVEL, best: BEST });
     }
+    if (window.CastleEconomy) CastleEconomy.reportMatch({ matchId: S.matchId, mode: S.mode, stage: LEVEL, won: result === 'win', durationMs: Date.now() - S.startedAt });
     var leveledUp = false;
-    if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }
+    if (S.mode === 'standard') { sfx(result === 'win' ? 'win' : 'lose'); }
+    else if (result === 'win') { if (LEVEL < 20) { LEVEL++; leveledUp = true; } lsSet('cb_level', String(LEVEL)); sfx('win'); }
     else sfx('lose');
     var rt = document.getElementById('resultTxt'), st = document.getElementById('endStat');
     rt.className = 'result ' + (result === 'win' ? 'win' : 'lose');
@@ -637,11 +662,11 @@
     var bonus = S.score - baseScore;
     document.getElementById('endScore').innerHTML = '⭐ Điểm: <b>' + S.score + '</b>' + (bonus ? ' (thưởng +' + bonus + ')' : '') +
       (result === 'lose' ? ' · daily tính ' + RULES.dailyScore(S.score, result) : '') + ' · Kỷ lục: <b>' + BEST + '</b>';
-    document.getElementById('endLevel').textContent = result === 'win'
+    document.getElementById('endLevel').textContent = S.mode === 'standard' ? 'Đấu Chuẩn — điểm vào bảng Chuẩn' : result === 'win'
       ? (leveledUp ? '⬆️ Lên Màn ' + LEVEL + '!' : 'Màn tối đa — Màn ' + LEVEL)
       : 'Vẫn ở Màn ' + LEVEL + ' — thử lại nhé';
     var nextBtn = document.getElementById('againBtn');
-    nextBtn.textContent = result === 'win' ? 'MÀN TIẾP ▶' : 'THỬ LẠI ↻';
+    nextBtn.textContent = S.mode === 'standard' ? 'ĐẤU LẠI ↻' : result === 'win' ? 'MÀN TIẾP ▶' : 'THỬ LẠI ↻';
     document.getElementById('endOv').classList.add('show');
   }
 
@@ -652,7 +677,7 @@
   document.getElementById('playBtn').addEventListener('click', function () {
     initAudio();
     document.getElementById('startOv').classList.remove('show');
-    newGame();
+    newGame('campaign');
   });
   document.getElementById('againBtn').addEventListener('click', function () {
     initAudio();
@@ -671,7 +696,7 @@
   // debug hook
   // step/setLevel/deploy/fire: cho test/playtest.js chạy trận giả lập nhanh (không render).
   if (/[?&]debug=1/.test(location.search)) window.__cb = {
-    get S() { return S; }, newGame: newGame, endGame: endGame, get level() { return LEVEL; },
+    get S() { return S; }, newGame: newGame, RULES: RULES, endGame: endGame, get level() { return LEVEL; },
     setLevel: function (n) { LEVEL = clamp(n | 0, 1, 20); },
     step: function (dt) { if (S && S.running && !S.over) update(dt); },
     deploy: function (k) { tryDeploy(k); },
@@ -681,6 +706,12 @@
     UNIT_TYPES: UNIT_TYPES, CARD_ORDER: CARD_ORDER
   };
 
+  var stdBtn = document.getElementById('stdBtn');
+  if (stdBtn) stdBtn.addEventListener('click', function () {
+    if (window.CastleEconomy && !CastleEconomy.canStandard()) { CastleEconomy.toast('Đấu Chuẩn mở ở cấp Lâu đài 3 (cần online)'); return; }
+    initAudio(); document.getElementById('startOv').classList.remove('show'); newGame('standard');
+  });
+  window.__cbRefreshStart = refreshStartInfo;
   refreshStartInfo();
   resize();
   requestAnimationFrame(frame);
