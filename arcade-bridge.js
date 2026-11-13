@@ -17,8 +17,13 @@
   window.Arcade.init({ gameId: GAME_ID }).then(function (a) {
     api = a; ready = true; G.ready = true; G.playerId = a.playerId;
 
-    G.onScore = function (board, score, name) {
+    // extra (vd {matchId}) đi kèm body: bảng 'standard' của castle bắt buộc matchId của trận Đấu Chuẩn.
+    G.onScore = function (board, score, name, extra) {
       if (!ready || typeof score !== 'number' || score <= 0) return;
+      if (extra) {
+        api.req('POST', '/v1/leaderboard/' + encodeURIComponent(board), Object.assign({ score: Math.trunc(score), name: name }, extra)).catch(noop);
+        return;
+      }
       api.leaderboard(board).submit(Math.trunc(score), name).catch(noop);
     };
     G.syncSave = function (obj) {
@@ -30,6 +35,8 @@
       return api.leaderboard(board).top(n || 10).catch(function () { return []; });
     };
     G.track = function (n, p) { if (ready) api.track(n, p); };
+    // REST tới platform (profile/match/upgrade/shop/orders) — trả body, lỗi mang .code.
+    G.api = function (method, path, body) { return api.req(method, path, body).then(function (r) { return r.body; }); };
 
     // Kéo save từ platform về (chơi máy khác). Game tự quyết dùng hay không.
     api.save.get().then(function (doc) {
@@ -38,6 +45,7 @@
       }
     }).catch(noop);
 
+    if (typeof window.__arcadeOnReadyEconomy === 'function') { try { window.__arcadeOnReadyEconomy(); } catch (e) {} }
     if (typeof window.__arcadeOnReady === 'function') { try { window.__arcadeOnReady(); } catch (e) {} }
   }).catch(noop);
 })();

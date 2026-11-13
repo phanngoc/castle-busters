@@ -10,7 +10,7 @@ mode = "offline"
 
 [capabilities]
 save        = true
-leaderboard = ["daily", "alltime"]
+leaderboard = ["daily", "alltime", "standard"]
 
 [limits]
 bundle_bytes = 5242880
