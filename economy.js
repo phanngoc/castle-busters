@@ -107,7 +107,9 @@
   }
   document.addEventListener('change', function (e) { if (e.target && e.target.name === 'cu') lsSet('cb_card_unit', e.target.value); });
   document.addEventListener('click', function (e) {
-    var t = e.target.closest ? e.target.closest('[data-up],[data-skin],[data-buy],[data-open],[data-close],[data-claim]') : null;
+    // Chạm nền tối quanh bottom sheet ⇒ đóng sheet đó.
+    if (e.target && e.target.classList && e.target.classList.contains('sheet') && e.target.classList.contains('show')) { closeOv(e.target.id); return; }
+    var t = e.target.closest ? e.target.closest('[data-up],[data-skin],[data-buy],[data-open],[data-close],[data-claim],[data-copy]') : null;
     if (!t) return;
     if (t.dataset.up) E.upgrade(t.dataset.up);
     else if (t.dataset.skin) { lsSet('cb_skin', t.dataset.skin); renderProfile(); }
@@ -115,7 +117,32 @@
     else if (t.dataset.open) openOv(t.dataset.open);
     else if (t.dataset.close) closeOv(t.dataset.close);
     else if (t.dataset.claim) claimPass();
+    else if (t.dataset.copy != null) copyText(t.dataset.copy);
   });
+  // Esc đóng sheet trên cùng (thanh toán trước, rồi cửa hàng).
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var ids = ['payOv', 'shopOv'];
+    for (var i = 0; i < ids.length; i++) if ($(ids[i]) && $(ids[i]).classList.contains('show')) { closeOv(ids[i]); return; }
+  });
+  function copyText(v) {
+    function done() { toast('📋 Đã sao chép'); }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea'); ta.value = v; ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, v.length);
+        var ok = document.execCommand('copy'); document.body.removeChild(ta);
+        if (ok) done(); else toast('Không sao chép được — giữ lâu để chọn chữ');
+      } catch (e) { toast('Không sao chép được — giữ lâu để chọn chữ'); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, fallback);
+    else fallback();
+  }
+  function syncSheetLock() {
+    var open = document.querySelector('.overlay.sheet.show');
+    document.body.classList.toggle('sheet-open', !!open);
+  }
   function claimPass() {
     api('POST', '/v1/castle/pass/claim', { unit: cardUnit() }).then(function (r) {
       if (r && r.profile) setProfile(r.profile);
@@ -127,8 +154,9 @@
     $(id).classList.add('show');
     if (id === 'profileOv') { renderProfile(); refresh(); }
     if (id === 'shopOv') loadShop();
+    syncSheetLock();
   }
-  function closeOv(id) { $(id).classList.remove('show'); if (id === 'payOv') stopPoll(); }
+  function closeOv(id) { $(id).classList.remove('show'); if (id === 'payOv') stopPoll(); syncSheetLock(); }
 
   // ---------- Cửa hàng ----------
   var LIMIT_TXT = { 'castle.gold.daily': '1/ngày', 'castle.cards.pick': '3/tuần', 'castle.starter': '1 lần/tài khoản', 'castle.pass.s1': '1/mùa' };
@@ -157,16 +185,32 @@
   }
 
   // ---------- Thanh toán QR ----------
+  function payRow(k, v, copy, mono) {
+    return '<div class="pay-row"><span class="k">' + k + '</span><span class="v' + (mono ? ' mono' : '') + '">' + esc(v) + '</span>' +
+      (copy != null && copy !== '' ? '<button class="copy" data-copy="' + esc(copy) + '" aria-label="Sao chép ' + k + '">Sao chép</button>' : '') + '</div>';
+  }
   function showPay(o) {
-    var q = o.qr || {};
+    var q = o.qr || {}, amt = q.amount || o.amount, code = q.content || o.code;
     var h = (o.sandbox ? '<div class="sandbox">🧪 SANDBOX — thanh toán giả lập, không trừ tiền thật</div>' : '') +
-      (q.imageUrl ? '<img class="qr" alt="QR chuyển khoản" src="' + esc(q.imageUrl) + '">' : '') +
-      '<div class="pay-info">Ngân hàng: <b>' + esc(q.bank) + '</b><br>Số TK: <b>' + esc(q.account) + '</b><br>Số tiền: <b>' + vnd(q.amount || o.amount) +
-      '</b><br>Nội dung CK: <b class="code">' + esc(q.content || o.code) + '</b></div>' +
-      '<div class="pf-sub" id="payStatus">⏳ Đang chờ thanh toán…</div>' +
-      (o.sandbox ? '<button class="btn sec" id="sandboxPay">Giả lập thanh toán</button>' : '');
+      '<div class="pay-top"><div><div class="pay-lbl">Số tiền</div><div class="pay-amt">' + vnd(amt) + '</div></div>' +
+      '<div><div class="pay-lbl">Mã đơn</div><b class="code pay-code">' + esc(code) + '</b></div></div>' +
+      (q.imageUrl ? '<img class="qr" alt="QR chuyển khoản" src="' + esc(q.imageUrl) + '">' +
+        '<p class="qr-hint">Mở app ngân hàng → <b>Quét QR</b>.<br>Đang dùng chính điện thoại này? Lưu ảnh QR rồi chọn “Quét từ ảnh”.</p>' +
+        '<a class="qr-open" href="' + esc(q.imageUrl) + '" target="_blank" rel="noopener">🖼️ Mở ảnh QR để lưu</a>'
+        : '<p class="qr-hint">Chuyển khoản theo thông tin dưới đây — nhớ ghi đúng <b>Nội dung CK</b>.</p>') +
+      '<div class="pay-rows">' +
+        payRow('Ngân hàng', q.bank || '—', q.bank) +
+        payRow('Số TK', q.account || '—', q.account, true) +
+        (q.accountName ? payRow('Chủ TK', q.accountName, q.accountName) : '') +
+        payRow('Số tiền', vnd(amt), String(Number(amt) || 0)) +
+        payRow('Nội dung CK', code, code, true) +
+      '</div>' +
+      '<div id="payStatus">⏳ Đang chờ thanh toán…</div>' +
+      (o.sandbox ? '<button class="btn sec pay-btn" id="sandboxPay">Giả lập thanh toán</button>' : '');
     $('payBody').innerHTML = h;
+    $('payBody').scrollTop = 0;
     $('payOv').classList.add('show');
+    syncSheetLock();
     var sp = $('sandboxPay');
     if (sp) sp.addEventListener('click', function () {
       sp.disabled = true;
