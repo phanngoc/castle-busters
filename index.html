@@ -107,6 +107,14 @@
     .sheet-box{max-width:480px;border-radius:20px;border-bottom:1px solid #ffffff22;max-height:88vh;max-height:88dvh}
     .sheet-grab{display:none}
   }
+  /* điện thoại (dọc, hoặc xoay ngang thấp): cửa hàng + thanh toán full màn hình, header có ✕ dính trên */
+  @media (max-width:719px), (max-height:520px) and (orientation:landscape){
+    .overlay.sheet{justify-content:flex-start;align-items:stretch;padding:0}
+    .sheet-box{height:100vh;height:100dvh;max-height:none;max-width:none;border:0;border-radius:0;box-shadow:none;animation:none;
+      padding-top:env(safe-area-inset-top)}
+    .sheet-grab{display:none}
+    .sheet-head{padding-top:6px;padding-bottom:6px;border-bottom:1px solid #ffffff14}
+  }
   .shop-it{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #ffffff12}
   .shop-it>div{min-width:0;flex:1}
   .si-name{font-weight:800;font-size:16px;overflow-wrap:anywhere} .si-tag{font-size:14px;opacity:.78;margin-top:2px}
